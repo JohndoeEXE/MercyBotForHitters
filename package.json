@@ -1,0 +1,22 @@
+{
+  "name": "discord-giveaway-mercy-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot with giveaway and mercy commands",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
+  "keywords": ["discord", "bot", "giveaway", "discord.js"],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.9.0"
+  }
+}

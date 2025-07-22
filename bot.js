@@ -93,8 +93,21 @@ async function registerCommands() {
 
     try {
         console.log('🔄 Refreshing application (/) commands...');
+        
+        // Register commands globally (takes up to 1 hour to propagate)
         await client.application.commands.set(commands);
-        console.log('✅ Successfully registered application commands.');
+        console.log('✅ Successfully registered global application commands.');
+        
+        // Also register for each guild immediately (instant)
+        for (const guild of client.guilds.cache.values()) {
+            try {
+                await guild.commands.set(commands);
+                console.log(`✅ Registered commands for guild: ${guild.name}`);
+            } catch (guildError) {
+                console.error(`❌ Failed to register commands for ${guild.name}:`, guildError.message);
+            }
+        }
+        
     } catch (error) {
         console.error('❌ Error registering commands:', error);
     }

@@ -1,6 +1,6 @@
-
 const { Client, GatewayIntentBits, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
+require('dotenv').config();
 
 const client = new Client({ 
     intents: [
@@ -291,11 +291,11 @@ async function endGiveaway(giveawayId) {
     saveData();
 }
 
-// Use environment variable for token (Railway compatible)
-const TOKEN = process.env.DISCORD_TOKEN || 'MTM5NjcxMjU4MTE2MjQ3MTQ5Nw.GesYCu.AXxjD9X-SPpiXXAsrfM16VLB-5bnMbR0SLgp74';
+// Use environment variable for token
+const TOKEN = process.env.DISCORD_TOKEN;
 
-if (TOKEN === 'YOUR_BOT_TOKEN') {
-    console.error('Please set DISCORD_TOKEN environment variable');
+if (!TOKEN) {
+    console.error('Please set DISCORD_TOKEN in your .env file');
     process.exit(1);
 }
 

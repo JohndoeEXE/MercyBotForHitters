@@ -7,6 +7,9 @@
     "start": "node bot.js",
     "dev": "nodemon bot.js"
   },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "keywords": ["discord", "bot", "giveaway", "discord.js"],
   "author": "Your Name",
   "license": "MIT",

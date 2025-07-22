@@ -1,6 +1,5 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
-require('dotenv').config();
 
 const client = new Client({ 
     intents: [
@@ -17,27 +16,36 @@ let botData = {
     giveaways: {}
 };
 
-// Load data from file if exists
+// Load data from file if exists (Railway compatible)
 try {
     if (fs.existsSync('botdata.json')) {
-        botData = JSON.parse(fs.readFileSync('botdata.json', 'utf8'));
+        const data = fs.readFileSync('botdata.json', 'utf8');
+        if (data.trim()) {
+            botData = JSON.parse(data);
+        }
     }
 } catch (error) {
-    console.log('Could not load botdata.json, using defaults');
+    console.log('Could not load botdata.json, using defaults:', error.message);
 }
 
 // Save data to file
 function saveData() {
     try {
         fs.writeFileSync('botdata.json', JSON.stringify(botData, null, 2));
+        console.log('Data saved successfully');
     } catch (error) {
         console.error('Error saving data:', error);
     }
 }
 
-client.once('ready', () => {
-    console.log(`Bot is ready! Logged in as ${client.user.tag}`);
-    registerCommands();
+client.once('ready', async () => {
+    console.log(`✅ Bot is ready! Logged in as ${client.user.tag}`);
+    console.log(`🎯 Bot is in ${client.guilds.cache.size} servers`);
+    
+    // Set bot status
+    client.user.setActivity('Giveaways & Mercy', { type: 'WATCHING' });
+    
+    await registerCommands();
 });
 
 // Register slash commands
@@ -53,7 +61,9 @@ async function registerCommands() {
             .addIntegerOption(option =>
                 option.setName('duration')
                     .setDescription('Duration in minutes')
-                    .setRequired(true))
+                    .setRequired(true)
+                    .setMinValue(1)
+                    .setMaxValue(10080))
             .addStringOption(option =>
                 option.setName('winner')
                     .setDescription('Rig the winner (user ID or mention)')
@@ -65,7 +75,8 @@ async function registerCommands() {
             .addStringOption(option =>
                 option.setName('message')
                     .setDescription('The mercy speech text')
-                    .setRequired(true)),
+                    .setRequired(true)
+                    .setMaxLength(2000)),
 
         new SlashCommandBuilder()
             .setName('mercy')
@@ -81,24 +92,38 @@ async function registerCommands() {
     ];
 
     try {
-        console.log('Refreshing application (/) commands...');
+        console.log('🔄 Refreshing application (/) commands...');
         await client.application.commands.set(commands);
-        console.log('Successfully registered application commands.');
+        console.log('✅ Successfully registered application commands.');
     } catch (error) {
-        console.error('Error registering commands:', error);
+        console.error('❌ Error registering commands:', error);
     }
 }
 
 client.on('interactionCreate', async interaction => {
-    if (interaction.isChatInputCommand()) {
-        await handleSlashCommand(interaction);
-    } else if (interaction.isButton()) {
-        await handleButton(interaction);
+    try {
+        if (interaction.isChatInputCommand()) {
+            await handleSlashCommand(interaction);
+        } else if (interaction.isButton()) {
+            await handleButton(interaction);
+        }
+    } catch (error) {
+        console.error('Error handling interaction:', error);
+        
+        const errorMessage = 'There was an error while executing this command!';
+        
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: errorMessage, ephemeral: true }).catch(() => {});
+        } else {
+            await interaction.reply({ content: errorMessage, ephemeral: true }).catch(() => {});
+        }
     }
 });
 
 async function handleSlashCommand(interaction) {
     const { commandName, options } = interaction;
+
+    console.log(`Command used: ${commandName} by ${interaction.user.tag}`);
 
     switch (commandName) {
         case 'giveaway':
@@ -113,6 +138,8 @@ async function handleSlashCommand(interaction) {
         case 'mercyrole':
             await handleMercyRole(interaction);
             break;
+        default:
+            await interaction.reply({ content: 'Unknown command!', ephemeral: true });
     }
 }
 
@@ -145,6 +172,7 @@ async function handleGiveaway(interaction) {
     botData.giveaways[giveawayId] = {
         messageId: message.id,
         channelId: interaction.channelId,
+        guildId: interaction.guildId,
         prize: prize,
         duration: duration,
         riggedWinner: riggedWinner,
@@ -157,6 +185,8 @@ async function handleGiveaway(interaction) {
 
     // Set timeout to end giveaway
     setTimeout(() => endGiveaway(giveawayId), duration * 60000);
+    
+    console.log(`Giveaway started: ${prize} for ${duration} minutes`);
 }
 
 async function handleMercySpeech(interaction) {
@@ -164,37 +194,54 @@ async function handleMercySpeech(interaction) {
     botData.mercyMessage = message;
     saveData();
     
-    await interaction.reply({ content: `Mercy speech updated to: "${message}"`, ephemeral: true });
+    await interaction.reply({ 
+        content: `✅ Mercy speech updated to: "${message.length > 100 ? message.substring(0, 100) + '...' : message}"`, 
+        ephemeral: true 
+    });
+    
+    console.log(`Mercy speech updated by ${interaction.user.tag}`);
 }
 
 async function handleMercy(interaction) {
     if (!botData.mercyRoleId) {
-        return interaction.reply({ content: 'No mercy role has been set! Use /mercyrole first.', ephemeral: true });
+        return interaction.reply({ content: '❌ No mercy role has been set! Use /mercyrole first.', ephemeral: true });
     }
 
     const embed = new EmbedBuilder()
-        .setTitle('Mercy')
+        .setTitle('🙏 Mercy')
         .setDescription(botData.mercyMessage)
-        .setColor('#00FF00');
+        .setColor('#00FF00')
+        .setTimestamp();
 
     const button = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId('mercy_accept')
-                .setLabel('Accept')
+                .setLabel('Accept Mercy')
                 .setEmoji('✅')
                 .setStyle(ButtonStyle.Success)
         );
 
     await interaction.reply({ embeds: [embed], components: [button] });
+    console.log(`Mercy message sent by ${interaction.user.tag}`);
 }
 
 async function handleMercyRole(interaction) {
     const role = interaction.options.getRole('role');
+    
+    // Check if bot can assign this role
+    if (role.position >= interaction.guild.members.me.roles.highest.position) {
+        return interaction.reply({ 
+            content: '❌ I cannot assign this role because it is higher than or equal to my highest role!', 
+            ephemeral: true 
+        });
+    }
+    
     botData.mercyRoleId = role.id;
     saveData();
     
-    await interaction.reply({ content: `Mercy role set to: ${role.name}`, ephemeral: true });
+    await interaction.reply({ content: `✅ Mercy role set to: ${role.name}`, ephemeral: true });
+    console.log(`Mercy role set to ${role.name} by ${interaction.user.tag}`);
 }
 
 async function handleButton(interaction) {
@@ -205,39 +252,41 @@ async function handleButton(interaction) {
         const giveaway = botData.giveaways[giveawayId];
 
         if (!giveaway || giveaway.ended) {
-            return interaction.reply({ content: 'This giveaway has ended!', ephemeral: true });
+            return interaction.reply({ content: '❌ This giveaway has ended!', ephemeral: true });
         }
 
         if (giveaway.participants.includes(interaction.user.id)) {
-            return interaction.reply({ content: 'You are already entered in this giveaway!', ephemeral: true });
+            return interaction.reply({ content: '❌ You are already entered in this giveaway!', ephemeral: true });
         }
 
         giveaway.participants.push(interaction.user.id);
         saveData();
 
-        await interaction.reply({ content: 'You have entered the giveaway! Good luck! 🍀', ephemeral: true });
+        await interaction.reply({ content: '✅ You have entered the giveaway! Good luck! 🍀', ephemeral: true });
+        console.log(`${interaction.user.tag} entered giveaway: ${giveaway.prize}`);
 
     } else if (customId === 'mercy_accept') {
         if (!botData.mercyRoleId) {
-            return interaction.reply({ content: 'No mercy role configured!', ephemeral: true });
+            return interaction.reply({ content: '❌ No mercy role configured!', ephemeral: true });
         }
 
         try {
             const role = interaction.guild.roles.cache.get(botData.mercyRoleId);
             if (!role) {
-                return interaction.reply({ content: 'Mercy role not found!', ephemeral: true });
+                return interaction.reply({ content: '❌ Mercy role not found!', ephemeral: true });
             }
 
             const member = interaction.member;
             if (member.roles.cache.has(botData.mercyRoleId)) {
-                return interaction.reply({ content: 'You already have the mercy role!', ephemeral: true });
+                return interaction.reply({ content: '❌ You already have the mercy role!', ephemeral: true });
             }
 
             await member.roles.add(role);
-            await interaction.reply({ content: `You have been granted the ${role.name} role!`, ephemeral: true });
+            await interaction.reply({ content: `✅ You have been granted the **${role.name}** role!`, ephemeral: true });
+            console.log(`${interaction.user.tag} received mercy role: ${role.name}`);
         } catch (error) {
             console.error('Error giving mercy role:', error);
-            await interaction.reply({ content: 'Failed to give you the role. Check bot permissions.', ephemeral: true });
+            await interaction.reply({ content: '❌ Failed to give you the role. Check bot permissions.', ephemeral: true });
         }
     }
 }
@@ -260,11 +309,16 @@ async function endGiveaway(giveawayId) {
 
     try {
         const channel = client.channels.cache.get(giveaway.channelId);
+        if (!channel) {
+            console.error('Channel not found for giveaway:', giveawayId);
+            return;
+        }
+
         const message = await channel.messages.fetch(giveaway.messageId);
 
         const embed = new EmbedBuilder()
             .setTitle('🎉 GIVEAWAY ENDED 🎉')
-            .setDescription(`**Prize:** ${giveaway.prize}\n\n${winner ? `**Winner:** <@${winner}>` : 'No participants, no winner!'}`)
+            .setDescription(`**Prize:** ${giveaway.prize}\n\n${winner ? `**Winner:** <@${winner}>\n**Participants:** ${giveaway.participants.length}` : 'No participants, no winner!'}`)
             .setColor('#FF0000')
             .setTimestamp();
 
@@ -283,7 +337,11 @@ async function endGiveaway(giveawayId) {
 
         if (winner) {
             await channel.send(`🎉 Congratulations <@${winner}>! You won **${giveaway.prize}**!`);
+        } else {
+            await channel.send(`😢 No one entered the giveaway for **${giveaway.prize}**.`);
         }
+
+        console.log(`Giveaway ended: ${giveaway.prize} - Winner: ${winner || 'None'}`);
     } catch (error) {
         console.error('Error ending giveaway:', error);
     }
@@ -291,12 +349,41 @@ async function endGiveaway(giveawayId) {
     saveData();
 }
 
-// Use environment variable for token
+// Handle process termination gracefully
+process.on('SIGINT', () => {
+    console.log('🔄 Received SIGINT. Saving data and shutting down gracefully...');
+    saveData();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('🔄 Received SIGTERM. Saving data and shutting down gracefully...');
+    saveData();
+    process.exit(0);
+});
+
+// Error handling
+client.on('error', error => {
+    console.error('Client error:', error);
+});
+
+process.on('unhandledRejection', error => {
+    console.error('Unhandled promise rejection:', error);
+});
+
+// Get token from environment variable
 const TOKEN = process.env.DISCORD_TOKEN;
 
 if (!TOKEN) {
-    console.error('Please set DISCORD_TOKEN in your .env file');
+    console.error('❌ DISCORD_TOKEN environment variable is required!');
+    console.error('Please set it in Railway dashboard under Variables tab.');
     process.exit(1);
 }
 
-client.login(TOKEN);
+console.log('🚀 Starting Discord bot...');
+console.log('📡 Connecting to Discord...');
+
+client.login(TOKEN).catch(error => {
+    console.error('❌ Failed to login:', error.message);
+    process.exit(1);
+});

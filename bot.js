@@ -292,7 +292,7 @@ async function endGiveaway(giveawayId) {
 }
 
 // Use environment variable for token (Railway compatible)
-const TOKEN = process.env.DISCORD_TOKEN || 'YOUR_BOT_TOKEN';
+const TOKEN = process.env.DISCORD_TOKEN || 'MTM5NjcxMjU4MTE2MjQ3MTQ5Nw.GesYCu.AXxjD9X-SPpiXXAsrfM16VLB-5bnMbR0SLgp74';
 
 if (TOKEN === 'YOUR_BOT_TOKEN') {
     console.error('Please set DISCORD_TOKEN environment variable');
